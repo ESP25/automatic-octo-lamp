@@ -26,7 +26,6 @@ BusOut leds(PB_15, PB_2, PC_6, PA_12, PA_14, PC_15); //LSB on the left to MSB on
 DigitalIn backdrop(PB_14);
 InterruptIn mag(PC_14); //Input from comparator
 
-
 PID left_control(1.0, 0.0, 0.0, RATE); //play with different rates
 PID right_control(1.0, 0.0, 0.0, RATE); //play with different rates
 Ticker  wdt;
