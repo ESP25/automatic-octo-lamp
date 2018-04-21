@@ -132,12 +132,14 @@ void led_switch(int select){
 }
 
 void wheel_PID(void){ 
-    left_pulses = wheel_one.getPulses();
+    left_pulses = wheel_one.getPulses();          //get pulses from encoder, and store it in left_pulses (integer)
     right_pulses = -1*wheel_two.getPulses();
     left_control.setProcessValue(left_pulses);
-    right_control.setProcessValue(right_pulses);
+    right_control.setProcessValue(right_pulses);  //the value from encoder is in right_pulses, and is the process value
     left_motor(left_control.compute());
-    right_motor(right_control.compute());
+    right_motor(right_control.compute());  //get the duty from object: left_control to left_motor to output PWM
+    
+    //this function already sets PID's input: pulses and PID's output: duty
 }
 
 //WORK IN PROGRESS
@@ -152,6 +154,8 @@ void PID_setup(void){ //tuning and work on paramets
   right_control.setOutputLimits(0.0, 1.0);
   right_control.setMode(1); //sets to auto
   right_control.setSetPoint(right_setpoint); //in terms of pulses
+  
+  // Since Setpoint is what the PID controls, the buggy does uniform motion (speed is constant) ?
 }
  
 
@@ -224,6 +228,7 @@ void line_offset(void){ //positive is to the right. 10 units to the right is 1.8
             break;
     default:  //go straight, but don't reset wdt
              break; //does nothing, i.e. leaves offset where it was
+    //wdt_kick() : let wdt_state be 1, which makes wdt_timerout() still counting
    }
  }
 
@@ -231,6 +236,7 @@ void motor_PID(int start){
     if(start == 1){
         line_offset();
         diff = -1.0*k*(offset);
+        //What is diff? What is it for?
         left_setpoint = BASE *(1 - diff);
         right_setpoint = BASE * (1 + diff);
         left_control.setSetPoint(left_setpoint); //in terms of pulses
@@ -269,8 +275,8 @@ int main(){
     
     wheel_one.reset();
     wheel_two.reset();
-    while(j){
-            wheel_PID();
+    while(j){                      //wdt(wdt_timerout) always tends to make j 0. wdt_state = 1 means still counting;
+            wheel_PID();           //
             motor_PID(start);
             visualise();
             wheel_one.reset();
