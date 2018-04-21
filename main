@@ -155,7 +155,7 @@ void PID_setup(void){ //tuning and work on paramets
   right_control.setMode(1); //sets to auto
   right_control.setSetPoint(right_setpoint); //in terms of pulses
   
-  // Since Setpoint is what the PID controls, the buggy does uniform motion (speed is constant) ?
+  // Since Setpoint is what the PID controls, the buggy does uniform motion (speed is constant) ? no, the value is set in motor_PID
 }
  
 
