@@ -288,10 +288,11 @@ int main(){
             wait(RATE);
     while(MMA.X()<-0.5){  // How does the MMA work??
             lcd.locate(0.28);
-            lcd.printf(“sloped detected”);
+            lcd.printf(“sloped deteccted”);
             left_motor(0.5);  //placeholder, maybe just multiply a constant to the output of PID
             right_motor(0.5);
             }
+            lcd.cls(); // good timing to clear LCD?
         }
     stop();
     lcd.cls();
@@ -308,3 +309,6 @@ int main(){
 // reference and encoder output: pulses
 // k tunes the setpoint (setpoint is in terms of )
 // inputlimit is in terms of pulses, and sets the max and min value of process value(?)
+
+//MMA:
+//what does x, y, z mean
