@@ -22,6 +22,7 @@ QEI wheel_one(PC_10, PC_12, NC, 256, QEI::X4_ENCODING); //These are placeholders
 QEI wheel_two(PC_11, PD_2, NC, 256, QEI::X4_ENCODING); //These are placeholders
 
 DigitalIn sensor[5] = {PB_1, PC_2, PC_3, PC_4,PC_5};
+AnalogIn pot1(PA_0);
 BusOut leds(PB_15, PB_2, PC_6, PA_12, PA_14, PC_15); //LSB on the left to MSB on the right. Means byte will be 00654321
 DigitalIn backdrop(PB_14);
 InterruptIn mag(PC_14); //Input from comparator
@@ -155,7 +156,7 @@ void PID_setup(void){ //tuning and work on paramets
   right_control.setMode(1); //sets to auto
   right_control.setSetPoint(right_setpoint); //in terms of pulses
   
-  // Since Setpoint is what the PID controls, the buggy does uniform motion (speed is constant) ? no, the value is set in motor_PID
+  // Since Setpoint is what the PID controls, the buggy does uniform motion (speed is constant) ?
 }
  
 
@@ -235,7 +236,7 @@ void line_offset(void){ //positive is to the right. 10 units to the right is 1.8
 void motor_PID(int start){
     if(start == 1){
         line_offset();
-        diff = -1.0*k*(offset);
+        diff = -1.0*k*(offset);                 // offset is ±1.0, ±0.5, ±0
         //What is diff? What is it for?
         left_setpoint = BASE *(1 - diff);
         right_setpoint = BASE * (1 + diff);
@@ -257,9 +258,9 @@ int main(){
   LED = 1; 
   
   while(1){
-    while(!sys_state){
-        k = pot1.read();
-        
+    while(!sys_state){ // initialised to be 0
+        k = pot1.read(); // change the left_setpoint and right_setpoint
+        // k is tuneable before toggle
         line_offset();
         lcd.cls();
         lcd.locate(0,0);
@@ -292,3 +293,10 @@ int main(){
          
   }
 }
+
+
+// PID: 
+// output duty ratio
+// reference and encoder output: pulses
+// k tunes the setpoint (setpoint is in terms of )
+// inputlimit is in terms of pulses, and sets the max and min value of process value(?)
