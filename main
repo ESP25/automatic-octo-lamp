@@ -2,6 +2,7 @@
 #include "QEI.h"
 #include "C12832.h"
 #include "PID.h"
+#include "MMA7660.h"
 #define RATE 0.1 //corresponds to 0.2 seconds
 #define BASE 300
 #define TIMEOUT 1.0
@@ -20,6 +21,8 @@ PwmOut pwm_two(PA_11);
 
 QEI wheel_one(PC_10, PC_12, NC, 256, QEI::X4_ENCODING); //These are placeholders
 QEI wheel_two(PC_11, PD_2, NC, 256, QEI::X4_ENCODING); //These are placeholders
+
+MMA7660 MMA(D14,D15);
 
 DigitalIn sensor[5] = {PB_1, PC_2, PC_3, PC_4,PC_5};
 AnalogIn pot1(PA_0);
@@ -283,6 +286,12 @@ int main(){
             wheel_one.reset();
             wheel_two.reset();
             wait(RATE);
+    while(MMA.X()<-0.5){  // How does the MMA work??
+            lcd.locate(0.28);
+            lcd.printf(“sloped detected”);
+            left_motor(0.5);  //placeholder, maybe just multiply a constant to the output of PID
+            right_motor(0.5);
+            }
         }
     stop();
     lcd.cls();
@@ -290,7 +299,6 @@ int main(){
     lcd.printf("END OF TRACK");
     wait(5);
     break;  
-         
   }
 }
 
