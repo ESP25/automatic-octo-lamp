@@ -312,3 +312,7 @@ int main(){
 
 //MMA:
 //what does x, y, z mean
+
+// there is only speed PID, position(steering) isn't closed-loop. The reference speed(setpoint of pulses) is changing with line-offset.
+// it takes time to for current speed to reach reference speed.
+// maybe steering PID (steering loop) is needed.
