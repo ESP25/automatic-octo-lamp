@@ -33,6 +33,8 @@ InterruptIn mag(PC_14); //Input from comparator
 
 PID left_control(1.0, 0.0, 0.0, RATE); //play with different rates
 PID right_control(1.0, 0.0, 0.0, RATE); //play with different rates
+//PID steering(1.0,0.0,0.0,0.0, RATE);
+
 Ticker  wdt;
 
 //Motor Configuration
@@ -145,6 +147,24 @@ void wheel_PID(void){
     
     //this function already sets PID's input: pulses and PID's output: duty
 }
+
+/*   in wheel_PID(void) funciton above:
+    left_motor(left_control.compute() + steering.compute());
+    right_motor(right_control.compute() - steering.compute());
+    //uniform motion
+    
+    //when turing, left_control.compute() and right_control.compute() can be a little bit small
+    //when driving uphill, ...
+*/
+
+/*
+void steering_PID(void){
+    steering.setInputLimits(0.0,1.0);
+    steering.setOutputLimits(0.0,1.0);
+    steering.setProcessValue(actual voltage);
+    steering.setSetPoing(default voltage);
+    steering.setMode(1);
+} */
 
 //WORK IN PROGRESS
 
