@@ -2,7 +2,7 @@
 #include "QEI.h"
 #include "C12832.h"
 #include "PID.h"
-#include "MMA7660.h"
+#include "MMA7660.h" //THIS IS NEW AND WAS NEVER USED IN ANY OF THE PREVIOUS VERSON?????
 #define RATE 0.1 //corresponds to 0.2 seconds
 #define BASE 300
 #define TIMEOUT 1.0
