@@ -1,119 +1,53 @@
 #include "mbed.h" 
-#include "QEI.h"
 #include "C12832.h"
 #include "PID.h"
-#define RATE 0.1 //corresponds to 0.2 seconds
+#include "math.h"
+#define RATE 0.1//corresponds to 0.1 seconds
 #define BASE 300
 #define TIMEOUT 1.0
  
 C12832 lcd(PA_7, PA_5, PA_6, PA_8, PB_6); 
-DigitalOut LED(PA_9); //blue
 
-DigitalOut enable(PA_15);  
-DigitalOut bipolar_one(PB_7); 
-DigitalOut bipolar_two(PC_13); 
-DigitalOut direction_one(PB_12);
-DigitalOut direction_two(PA_13);
-InterruptIn user_toggle(PB_5);  //Start button
-PwmOut pwm_one(PC_8); 
-PwmOut pwm_two(PA_11);
-
-QEI wheel_one(PC_10, PC_12, NC, 256, QEI::X4_ENCODING); //These are placeholders
-QEI wheel_two(PC_11, PD_2, NC, 256, QEI::X4_ENCODING); //These are placeholders
-
-DigitalIn sensor[5] = {PB_1, PC_2, PC_3, PC_4,PC_5};
-BusOut leds(PB_15, PB_2, PC_6, PA_12, PA_14, PC_15); //LSB on the left to MSB on the right. Means byte will be 00654321
-DigitalIn backdrop(PB_14);
+BusOut leds(PB_15, PB_2, PC_6, PA_12, PA_14); //LSB on the left to MSB on the right. Means byte will be 00654321
+AnalogIn sensor[5] = {PB_1, PC_2, PC_3, PC_4,PC_5};
+Ticker  wdt;
+Ticker PID_caller;
 InterruptIn mag(PC_14); //Input from comparator
 
-PID left_control(1.0, 0.0, 0.0, RATE); //play with different rates
-PID right_control(1.0, 0.0, 0.0, RATE); //play with different rates
-Ticker  wdt;
+PID navigation(1.0, 0.0, 0.0, RATE);
 
-//Motor Configuration
-int M_1_bipolar = 0;
-int M_1_direction = 1; // 1 goes forwards right motor
-int M_2_bipolar = 0;
-int M_2_direction = 0;  // 0 goes forwards left motor
-int sys_state = 0; //system state (1 = motor on, 0 = motor off)
-int start = 1; //software start
-int left_pulses = 0; //left motor speed in rpm
-int right_pulses = 0; //right motor speed in rpm
-float left_duty = 0; //duty cycle of the right motor
-float right_duty = 0; //duty cycle of the right motor
-float left_setpoint = 100; //what the PID control works on eventually
-float right_setpoint = 100; //JUST A PLACEHOLDER. THIS HAS TO BE CHOSEN BY THE GROUP
+float left_duty = 0.0;
+float right_duty = 0.0;
+float left_setpoint = BASE; //what the PID control works on eventually
+float right_setpoint = BASE; //JUST A PLACEHOLDER. THIS HAS TO BE CHOSEN BY THE GROUP
+float data[5] = {0}; 
+float temp = 0.0;
+float threshold = 0.20;
+int centre_flag = 0; //1 if centre sensor detects line
 
+float direction = 0.0;
+float offset = 0.0;
+float steering_action = 0.0;
 
-int data[5] = {0}; 
-int s_total = 0;
-int bd = 0;      
-int led_iterate[5] = {33, 36, 48, 34, 40}; //Bit 0,Bit 2,Bit 4, Bit 1,Bit 3 (1,3,5,2,4)
 int sensor_iterate[5] = {0,2,4,1,3}; //Works
-int lsel = 0;
-int ssel = 0;
+int sel = 0;
 int wdt_state = 0;
-int mag_state = 1;
-float offset = 0;
-int j = 1;
 int i = 0;
-float md = 0.0;
-float diff = 0.0;
+
+int j = 1;
 
 
-float k = 0.00;
-float turn = 0.0;
 
-//// THESE WORK
 
-void system(void){ //controlled by the joystick this toggles the motor on/off
-   sys_state = !sys_state;
-       if(sys_state){
-           enable = 1;
-            }
-       else{
-          enable = 0;  
-            }
-}
-void pwm_frequency(int frequency){ //to simplify calculations and setup
-    int period = 1000000 / frequency; //in microseconds
-    pwm_one.period_us(period); 
-    pwm_two.period_us(period); 
-}
-void left_motor(float duty){ 
-  //since the motors have an inverted duty cycle, this simplifies this in software
-    pwm_one.write(float(1.0) - duty);
-}
-void right_motor(float duty){ 
-    //same as above
-    pwm_two.write(float(1.0) - duty);
-}
-void stop(void){ //a specific stop function to override the motor control and to be used by the Watch Dog Timer
-    start = 0;
-    j = 1;
-    sys_state = 0;
-    left_motor(0);
-    right_motor(0);
-}
-
-void motor_setup(void){//The following are set irrespective if the motor board is on or off and are later based on the PID control
-  enable = 0; //Sets enable to zero ahead of user input
-  bipolar_one = M_1_bipolar;
-  bipolar_two = M_2_bipolar;
-  direction_one = M_1_direction;
-  direction_two = M_2_direction;
-   
-  //SETUP OF PWM
-  pwm_frequency(5000);
-}
 
 void wdt_timeout(void){
     if (!wdt_state){
         j = 0;
-        
+        //stop(); //REQUIRES motor_control to be includes
     }
     wdt_state = 0; //resets the timer
 }
+
 void wdt_kick(void){
     wdt_state = 1; 
     //kicks the wdt
@@ -122,166 +56,100 @@ void wdt_kick(void){
 void visualise(void){
     lcd.cls();
     lcd.locate(0,0);
-    lcd.printf("OFF: %.2f\nL: %.0f R: %.0f\nLA: %d RA: %d", offset, left_setpoint, right_setpoint, left_pulses, right_pulses); //, diff, left_setpoint, right_setpoint)
+    //lcd.printf("%.2f %.2f %.2f %.2f %.2f\n%d", data[4], data[3], data[2], data[1], data[0], wdt_state);
+    lcd.printf("O: %.1f SA: %.2f C: %d\n%.0f %.0f", offset, steering_action, centre_flag, left_setpoint, right_setpoint); 
 }
-
-void led_switch(int select){ 
-  //iterate with iteration_count%6 leds.write(0);
-   leds.write(select); //this should cause a circular loop plus sets all other LEDs to zero.
-}
-
-void wheel_PID(void){ 
-    left_pulses = wheel_one.getPulses();
-    right_pulses = -1*wheel_two.getPulses();
-    left_control.setProcessValue(left_pulses);
-    right_control.setProcessValue(right_pulses);
-    left_motor(left_control.compute());
-    right_motor(right_control.compute());
-}
-
-//WORK IN PROGRESS
-
-void PID_setup(void){ //tuning and work on paramets
-  left_control.setInputLimits(0.0, 870); //max to be determined in experiment
-  left_control.setOutputLimits(0.0, 1.0);
-  left_control.setMode(1); //sets to auto (manual used later to override control)
-  left_control.setSetPoint(left_setpoint); //in terms of pulses
-
-  right_control.setInputLimits(0.0, 900); //max to be determined in experiment
-  right_control.setOutputLimits(0.0, 1.0);
-  right_control.setMode(1); //sets to auto
-  right_control.setSetPoint(right_setpoint); //in terms of pulses
-}
- 
-
-
-void turn_around(void) { // Turns around the buggy
-    if(mag_state){
-    wdt_state = 1;
-    left_motor(0.0);
-    right_motor(0.0);
-    LED = 0;
-    wdt_state = 1;
-    wait(0.2);
-    wdt_state = 1;
-    M_2_direction = 1;
-    left_motor(0.1);
-    right_motor(0.9);
-    wdt_state = 1;
-    wait(0.6);
-    wdt_state = 1;
-    LED = 0;
-    mag_state = 0;
-    left_motor(0.0);
-    right_motor(0.0);
-    wdt_state = 1;
-    M_2_direction = 0;
-    wait(0.2);
-    wdt_state = 1;
-    }
-}
-
 
 
 void measure_sensors(void){ //0 is off, 1 is on
-    leds.write(63);
     for(i = 0; i < 5; i++){
-       
-       ssel = sensor_iterate[i];
-       
-       wait(0.01);
-       data[ssel]= sensor[ssel].read(); //why not sensor.read (which returns a float)
+       sel = sensor_iterate[i];
+       temp = sensor[sel].read(); //why not sensor.read (which returns a float)
+
+       if(temp >= float(threshold)){
+          data[sel] = temp;
+          wdt_kick();
+       }
+       else{
+        data[sel] = temp / 10;
+       }
     }
-   
-    s_total = 16*data[4] + 8*data [3] + 4*data[2] + 2*data[1] + 1*data[0];
+    if(data[2] >= 0.85){
+      centre_flag = 1;
+        }
+    else{
+      centre_flag = 0;
+    }
+     
 }
 
 void line_offset(void){ //positive is to the right. 10 units to the right is 1.8 cm. Function returns the average of the center leds
-   measure_sensors();
-   switch(s_total){
-    case 1: offset = 1.0;
-            wdt_kick();
-            break;
-    case 2: offset = 0.25;
-            wdt_kick();
-            break;
-    case 3: offset = 0.50;
-            wdt_kick();
-            break;
-    case 4: offset = 0;
-            
-            wdt_kick();
-            break;
-    case 8: offset = -0.25;
-            wdt_kick();
-            break;
-    case 16: offset = -1.0;
-            wdt_kick();
-            break;
-    case 24: offset = -0.50;
-            wdt_kick();
-            break;
-    default:  //go straight, but don't reset wdt
-             break; //does nothing, i.e. leaves offset where it was
-   }
+  measure_sensors();
+  offset =  (data[4]*-20.0)+(data[3]*-10.0)+(data[2]*0)+(data[1]*10.0)+(data[0]*20.0);
+    //offset is then fed into the PID control as a magnitude with direction deciding which way the motor differential leans
+   
  }
 
-void motor_PID(int start){
-    if(start == 1){
-        line_offset();
-        diff = -1.0*k*(offset);
-        left_setpoint = BASE *(1 - diff);
-        right_setpoint = BASE * (1 + diff);
-        left_control.setSetPoint(left_setpoint); //in terms of pulses
-        right_control.setSetPoint(right_setpoint); //in terms of pulses
+void PID_setup(void){
+    //tuning and work on parameters
+    navigation.setInputLimits(-20.0, 0.0); //max to be determined in experiment
+    navigation.setOutputLimits(0.0, 1.0);
+    navigation.setMode(AUTO_MODE); //sets to auto (manual used later to override control)
+    navigation.setSetPoint(0.0); //in terms of pulses
+}
+
+float enforce(float d){// enforces that the duty cycle stays inisde 0.0 - 1.0
+    if(d < 0.0){
+      return 0.0;
     }
+
+    else if(d > 1.0){
+      return 1.0;
+    }
+
+    else{
+      return d;
+    }
+}
+
+void navigation_PID(void){
+    if(j){
+        direction = copysign(1.0, offset);
+    navigation.setProcessValue(-1.0*fabs(offset));
+    steering_action = direction*navigation.compute();
+    if(centre_flag){
+    left_setpoint = BASE;
+    right_setpoint = BASE;
+  }
+    else{
+    left_setpoint = BASE*(1 - steering_action);
+    right_setpoint = BASE*(1 + steering_action);
+    }
+    visualise();
+  }
 }
 
 
 
 int main(){
-  user_toggle.rise(&system); //When button is pressed, the state is toggled
-  motor_setup();
   PID_setup();
-  enable = 0;
-  
-        
-  
-  LED = 1; 
-  
-  while(1){
-    while(!sys_state){
-        k = pot1.read();
-        
+  leds.write(31); //check this!!!!
+
+ 
+  PID_caller.attach(&navigation_PID, RATE);
+
+  wdt.attach(&wdt_timeout, TIMEOUT); //interaction with turnaround. Check documentation
+  while(j){
+        //navigation_PID();
         line_offset();
-        lcd.cls();
-        lcd.locate(0,0);
-        lcd.printf("%.2f \nOFF: %.2f", k, offset);
-        wait(0.1);
-      
-        }
-   
-  LED = 1;
-    
-    wdt.attach(&wdt_timeout, 3.0); //interaction with turnaround. Check documentation
-    mag.fall(&turn_around);
-    
-    wheel_one.reset();
-    wheel_two.reset();
-    while(j){
-            wheel_PID();
-            motor_PID(start);
-            visualise();
-            wheel_one.reset();
-            wheel_two.reset();
-            wait(RATE);
-        }
-    stop();
-    lcd.cls();
-    lcd.locate(0,0);
-    lcd.printf("END OF TRACK");
-    wait(5);
-    break;  
-         
+        //wait(RATE);      
   }
+
+
+  //stop();
+  lcd.cls();
+  lcd.locate(0,0);
+  lcd.printf("END OF TRACK");
+  wait(10);
+  return 0;
 }
